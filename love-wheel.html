@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LOVE Wheel ❤️</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,"Noto Sans Thai",sans-serif;background:linear-gradient(135deg,#fff0f6,#f3e8ff);color:#35152b;min-height:100vh}
+    .wrap{max-width:720px;margin:auto;padding:22px 16px 40px}
+    .card{background:#fff;border-radius:24px;padding:20px;box-shadow:0 10px 35px #8c477a22;margin-bottom:16px}
+    h1{text-align:center;margin:5px 0 4px;font-size:34px}
+    .sub{text-align:center;color:#79566d;margin:0 0 18px}
+    label{font-weight:700;display:block;margin:10px 0 6px}
+    input{width:100%;padding:13px 14px;border:1px solid #e2cfdd;border-radius:12px;font-size:16px}
+    button{border:0;border-radius:14px;padding:13px 18px;font-size:16px;font-weight:800;cursor:pointer}
+    .primary{background:#e83e8c;color:#fff;width:100%;margin-top:12px}
+    .secondary{background:#f3d9e8;color:#6e234d}
+    .status{text-align:center;font-size:14px;margin-top:10px;color:#777}
+    .wheelbox{display:flex;justify-content:center;align-items:center;position:relative;margin:10px 0}
+    .pointer{position:absolute;top:0;z-index:3;font-size:32px;filter:drop-shadow(0 2px 2px #555)}
+    canvas{width:min(86vw,390px);height:min(86vw,390px);border-radius:50%;transition:transform 4s cubic-bezier(.12,.72,.18,1);box-shadow:0 7px 25px #5b254533}
+    .spin{display:block;margin:12px auto 0;background:#7c3aed;color:white;padding:15px 30px;font-size:20px}
+    .result{background:#fff2f8;border:2px solid #f5a9ce;border-radius:18px;padding:18px;text-align:center;margin-top:16px}
+    .result small{color:#8a5873}
+    .question{font-size:22px;font-weight:800;margin-top:7px;line-height:1.4}
+    .players{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .player{background:#faf5f8;border-radius:14px;padding:12px;text-align:center}
+    .dot{display:inline-block;width:9px;height:9px;background:#35b56b;border-radius:50%;margin-right:5px}
+    .hint{font-size:13px;color:#7c6875;line-height:1.5}
+    .hidden{display:none}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>LOVE Wheel ❤️</h1>
+    <p class="sub">วงล้อคำถามสำหรับคนสองคน</p>
+
+    <label for="name">ชื่อของคุณ</label>
+    <input id="name" placeholder="เช่น อิศราวุฒิ" maxlength="30">
+
+    <label for="room">รหัสห้อง</label>
+    <input id="room" value="love-room" maxlength="40">
+
+    <button class="primary" id="join">เข้าห้อง</button>
+    <div class="status" id="status">ยังไม่ได้เข้าห้อง</div>
+  </div>
+
+  <div class="card hidden" id="game">
+    <div class="players">
+      <div class="player">👤 ผู้เล่น 1<br><b id="p1">รอผู้เล่น</b></div>
+      <div class="player">👤 ผู้เล่น 2<br><b id="p2">รอผู้เล่น</b></div>
+    </div>
+
+    <div class="wheelbox">
+      <div class="pointer">▼</div>
+      <canvas id="wheel" width="500" height="500"></canvas>
+    </div>
+
+    <button class="spin" id="spin">🎡 หมุนวงล้อ</button>
+
+    <div class="result">
+      <small>คำถามล่าสุด</small>
+      <div class="question" id="question">กดหมุนเพื่อเริ่มเล่น</div>
+    </div>
+    <p class="hint">เมื่อคนหนึ่งหมุน ผลจะถูกบันทึกใน Firebase และอีกคนในห้องเดียวกันจะเห็นผลเดียวกันโดยอัตโนมัติ</p>
+    <button class="secondary" id="leave">ออกจากห้อง</button>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+import {
+  getFirestore, doc, setDoc, updateDoc, onSnapshot, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCu9aXijDFMIH028PUFklK9ZMsK5og9_sQ",
+  authDomain: "love1-1ccc8.firebaseapp.com",
+  projectId: "love1-1ccc8",
+  storageBucket: "love1-1ccc8.firebasestorage.app",
+  messagingSenderId: "872190411846",
+  appId: "1:872190411846:web:7f8ba365607b4729c5f647",
+  measurementId: "G-FDGFLSMRT8"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const questions = [
+  "อะไรคือสิ่งเล็ก ๆ ที่ทำให้คุณรู้สึกดีเวลาได้คุยกัน?",
+  "ครั้งแรกที่คุยกัน คุณรู้สึกอย่างไร?",
+  "ถ้าเราได้เจอกันตอนนี้ อยากทำอะไรด้วยกัน?",
+  "มีเรื่องอะไรที่อยากให้เราเข้าใจกันมากขึ้น?",
+  "ถ้าต้องเลือกหนึ่งสถานที่ไปเที่ยวด้วยกัน จะเลือกที่ไหน?",
+  "เวลาอยู่ไกลกัน คุณอยากให้เราใช้วิธีไหนติดต่อกันมากที่สุด?",
+  "อะไรทำให้คุณรู้สึกว่าอีกคนใส่ใจ?",
+  "มีคำพูดไหนที่ได้ยินแล้วทำให้ยิ้ม?",
+  "ถ้าได้ใช้เวลาหนึ่งวันด้วยกัน อยากให้วันนั้นเป็นแบบไหน?",
+  "เรื่องอะไรที่อยากเล่าให้อีกคนฟังแต่ยังไม่มีโอกาส?",
+  "ถ้าเราไม่ว่างพร้อมกัน คิดว่าเราควรทำอย่างไรให้ยังรู้สึกใกล้กัน?",
+  "ชอบให้คนคุยทักมาก่อนในช่วงเวลาไหน?",
+  "มีเพลงหรือหนังเรื่องไหนที่อยากแนะนำให้อีกคน?",
+  "ถ้าได้ถ่ายรูปคู่หนึ่งรูป อยากถ่ายที่ไหน?",
+  "อะไรคือสิ่งที่ทำให้การคุยกันทางไกลสนุกขึ้น?",
+  "อยากให้เรามีความทรงจำร่วมกันเรื่องอะไร?",
+  "ถ้ามีเวลาโทรคุยกันแค่ 10 นาที จะอยากคุยเรื่องอะไร?",
+  "สิ่งไหนที่คิดว่าเราสองคนมีเหมือนกัน?",
+  "มีอะไรที่อยากลองทำด้วยกันในอนาคต?",
+  "ตอนนี้อยากถามอะไรอีกคนหนึ่ง?"
+];
+
+const canvas = document.getElementById("wheel");
+const ctx = canvas.getContext("2d");
+const questionEl = document.getElementById("question");
+const statusEl = document.getElementById("status");
+const gameEl = document.getElementById("game");
+const spinBtn = document.getElementById("spin");
+let roomRef = null;
+let unsubscribe = null;
+let spinning = false;
+let rotation = 0;
+
+function drawWheel() {
+  const cx=250, cy=250, r=235;
+  ctx.clearRect(0,0,500,500);
+  const slice=(Math.PI*2)/questions.length;
+  for(let i=0;i<questions.length;i++){
+    const a=i*slice;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,a,a+slice); ctx.closePath();
+    ctx.fillStyle=`hsl(${330 + (i/questions.length)*45}, 75%, ${i%2?82:72}%)`;
+    ctx.fill(); ctx.strokeStyle="#fff"; ctx.lineWidth=3; ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(cx,cy,48,0,Math.PI*2); ctx.fillStyle="#fff"; ctx.fill();
+  ctx.strokeStyle="#e83e8c"; ctx.lineWidth=7; ctx.stroke();
+  ctx.fillStyle="#e83e8c"; ctx.font="bold 28px sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillText("LOVE",cx,cy);
+}
+drawWheel();
+
+function setStatus(t){ statusEl.textContent=t; }
+
+document.getElementById("join").onclick = async () => {
+  const name=document.getElementById("name").value.trim();
+  const room=document.getElementById("room").value.trim().replace(/[\/#?]/g,"-");
+  if(!name || !room){ alert("กรุณาใส่ชื่อและรหัสห้อง"); return; }
+
+  roomRef=doc(db,"rooms",room);
+  try{
+    await setDoc(roomRef,{
+      question: "ยังไม่มีคำถาม",
+      result: "ยังไม่มีผล",
+      player1: name,
+      player2: "",
+      updatedAt: serverTimestamp()
+    },{merge:true});
+
+    if(unsubscribe) unsubscribe();
+    unsubscribe=onSnapshot(roomRef,(snap)=>{
+      if(!snap.exists()) return;
+      const d=snap.data();
+      document.getElementById("p1").textContent=d.player1 || "รอผู้เล่น";
+      document.getElementById("p2").textContent=d.player2 || "รอผู้เล่น";
+      if(d.question) questionEl.textContent=d.question;
+    },(err)=>{
+      setStatus("อ่านข้อมูลไม่ได้: "+err.message);
+    });
+
+    gameEl.classList.remove("hidden");
+    setStatus("เข้าห้อง "+room+" แล้ว");
+  }catch(e){
+    setStatus("เกิดข้อผิดพลาด: "+e.message);
+  }
+};
+
+document.getElementById("spin").onclick = async () => {
+  if(!roomRef || spinning) return;
+  spinning=true; spinBtn.disabled=true;
+  const index=Math.floor(Math.random()*questions.length);
+  const turns=5+Math.random()*3;
+  rotation += turns*360 + (360 - index*(360/questions.length) - 360/(questions.length*2));
+  canvas.style.transform=`rotate(${rotation}deg)`;
+  setTimeout(async ()=>{
+    try{
+      await updateDoc(roomRef,{
+        question: questions[index],
+        result: String(index),
+        updatedAt: serverTimestamp()
+      });
+    }catch(e){ setStatus("บันทึกผลไม่ได้: "+e.message); }
+    spinning=false; spinBtn.disabled=false;
+  },4000);
+};
+
+document.getElementById("leave").onclick=()=>{
+  if(unsubscribe) unsubscribe();
+  unsubscribe=null; roomRef=null;
+  gameEl.classList.add("hidden");
+  setStatus("ออกจากห้องแล้ว");
+};
+</script>
+</body>
+</html>
